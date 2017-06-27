@@ -22,34 +22,34 @@ GMAIL_USER = "cpiresearchtracker@gmail.com"
 GMAIL_PWD = "1f9RMPapwxwB"
 
 
-def firstLast(content):
+def firstLast(content): # first name then last name
 	return " ".join(content)
 
-def lastFirst(content):
+def lastFirst(content): # last name then first name 
 	return ", ".join(content[::-1])
 
-def firstInitialLast(content):
+def firstInitialLast(content): # first initial then last name
 	content[0] = content[0][:1]
 	return " ".join(content[::-1])
 
-def lastFirstInitial(content):
+def lastFirstInitial(content): # last name then first name
 	return " ".join(content)
 
-def getAffiliateNames(url):
+def getAffiliateNames(url): # obtain all affiliate names
 	html = urlopen(url)
-	cr = csv.reader(html.read().decode('utf-8').splitlines())
-	included_cols = [0, 1]
-	nameDict = {}
+	affiliateFile = csv.reader(html.read().decode('utf-8').splitlines()) # read csv file
+	included_cols = [0, 1] # include first and last name column
+	nameDict = {} # create a name dictionary. The key will be the affiliate's page, values will be all combinations of the name
 
-	for row in cr:
-		content = list(row[i] for i in included_cols)
+	for row in affiliateFile: # for every row of the file
+		content = list(row[i] for i in included_cols) # create a list with the first name and last name
 		name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
-		nameDict[row[2]] = name
+		# create variations of the name
+		nameDict[row[2]] = name # as described, key will be affiliate's page, name will be the list of variations
 	return nameDict
 
 
-
-def openUrlRequests(url):
+def openUrlRequests(url): # open url using requests package
 	try:
  	    html = requests.get(url).text # open journal home page
  	    return html
@@ -57,60 +57,60 @@ def openUrlRequests(url):
    	    print(e)
    	    return None
 
-def removeMiddleName(allNames):
+def removeMiddleName(allNames): # remove middle names (takes the first word and the last word)
 	nameList = list()
 	for name in allNames: 
 		fml = name.split(" ") # obtain first middle last name
-		fm = [fml[0], fml[-1]]
-		nameList.append(" ".join(fm))
+		fm = [fml[0], fml[-1]] # create a list with the first word and the last word (assume first and last name)
+		nameList.append(" ".join(fm)) # join together the first and last name as a string, add to the list of names
 	return(nameList)
 
-def findAsjAuthors(url):
-     html = openUrlRequests(url)
+def findAsjAuthors(url): # find authors for American Sociology Journal
+     html = openUrlRequests(url) # use requests to open the page
      try:
      	bsObj = BeautifulSoup(html, "html.parser")
-     	allNamesUnclean = bsObj.findAll("span", {"class":"hlFld-ContribAuthor"})
-     	allNames = list()
-     	for name in allNamesUnclean:
-     		allNames.append(name.get_text())
-     	return removeMiddleName(allNames)
+     	allNamesUnclean = bsObj.findAll("span", {"class":"hlFld-ContribAuthor"}) # tag for author listing
+     	nameList = list()
+     	for name in allNamesUnclean: # unclean list of names with tags
+     		nameList.append(name.get_text()) 
+     	return removeMiddleName(nameList) # return after removing middle name
      except AttributeError as e: # return if there is an attribute error
      	return None
 
-def findApsrAuthors(url):
-	html = openUrlRequests(url)
+def findApsrAuthors(url): # find all authors for American Political Science Review
+	html = openUrlRequests(url) # use requests to open page
 	try:
 		soup = BeautifulSoup(html, "html.parser")
-		nameList = soup.findAll("li", {"class":"author"})
-		allNames = list()
-		pattern = re.compile("\s*,\s*|\s+$")
-		for name in nameList:
-			name = name.get_text().lstrip("\n").title()
-			allNames = allNames + pattern.split(name)
-		return removeMiddleName(allNames)
+		allNamesUnclean = soup.findAll("li", {"class":"author"}) # tag for author listing
+		nameList = list()
+		pattern = re.compile("\s*,\s*|\s+$") # remove commas and spaces at the end
+		for name in allNamesUnclean:
+			name = name.get_text().lstrip("\n").title() # remove new line at the end of names, change to title case
+			nameList = nameList + pattern.split(name) # split names at the given pattern
+		return removeMiddleName(nameList) # return after removing middle name
 	except AttributeError as e: # return if there is an attribute error
          return None
 
 
-def findAsrAuthors(url):
-	html = openUrlRequests(url)
+def findAsrAuthors(url): # find all authors for the American Sociological Review
+	html = openUrlRequests(url) # use requests to open the page
 	try:
 		soup = BeautifulSoup(html, "html.parser")
 		# this soupList contains "See all articles..." which has the same tag, so remove it later
-		soupList = soup.findAll("a", class_="entryAuthor", href=re.compile("^(/author/).*(\%2C\+).*$")) 
+		soupList = soup.findAll("a", class_="entryAuthor", href=re.compile("^(/author/).*(\%2C\+).*$")) # tag for author listing
 	except AttributeError as e:
 		return None
 	nameList = list() # create an empty set of the actual names
 	for name in soupList: # find all the names in the soupList, excluding "See all entries..."
 		if not "articles" in name.get_text(): # remove the "See all articles..."
 			nameList.append(name.getText().lstrip()) # remove the white space in the front
-	return removeMiddleName(nameList) # return the names
+	return removeMiddleName(nameList) # return the names removing middle name
 
 
 def findNberAuthors(url): # get names for National Bureau of Economic Research
      html = openUrlRequests(url)
      soup = BeautifulSoup(html, "html.parser")
-     allTitles = soup.find("ul").findAll("li") # 
+     allTitles = soup.find("ul").findAll("li") # tag for the authors
      nameListAppend = set()
      for title in allTitles:
           title = title.get_text()
@@ -224,7 +224,7 @@ def gatherAllAuthors():
 	asj = findAsjAuthors(ASJ_URL) # american sociology journal
 	asr = findAsrAuthors(ASR_URL) # american sociological review
 
-
+	# create a dictionary of all authors, journal name as key and the list of names as values
 	allAuthors = {"Journal of Policy and Analysis" : jpam,
 				  "Journal of Marriage and Family" : jomf,
 				  "Social Politics" : sp,
@@ -242,17 +242,17 @@ allAuthors = gatherAllAuthors()
 
 def sendAuthorInformation(allAuthors, to, gmail_user, gmail_pwd):
 	message = ""
-	cpiAffliates = getAffiliateNames(CPI_NAMES)
+	cpiAffliates = getAffiliateNames(CPI_NAMES) # gather affiliate name
 
-	for affiliate in cpiAffliates:
-		for namevariation in cpiAffliates[affiliate]: 
-			for journal in allAuthors:
-				for name in allAuthors[journal]:
-					if namevariation == name:
+	for affiliate in cpiAffliates: # loop through all affiliates
+		for namevariation in cpiAffliates[affiliate]: # loop through all name variations
+			for journal in allAuthors: # loop through the journals
+				for name in allAuthors[journal]: # loop through all authors of the journal
+					if namevariation == name: # if a name matches
 						print(journal + ": " + name + " " + affiliate)
-						message = message + "\n" + journal + ": " + name + " " + affiliate
+						message = message + "\n" + journal + ": " + name + " " + affiliate + " \n" # add to email message
 
-	smtpserver = smtplib.SMTP("smtp.gmail.com",587)
+	smtpserver = smtplib.SMTP("smtp.gmail.com", 587)
 	smtpserver.ehlo()
 	smtpserver.starttls()
 	smtpserver.ehlo
@@ -263,5 +263,5 @@ def sendAuthorInformation(allAuthors, to, gmail_user, gmail_pwd):
 	print("done!")
 	smtpserver.close()
 
-sendAuthorInformation(allAuthors, TO, GMAIL_USER, GMAIL_PWD)
+sendAuthorInformation(allAuthors, TO, GMAIL_USER, GMAIL_PWD) # send email
 
