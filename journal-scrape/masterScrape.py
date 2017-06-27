@@ -13,12 +13,6 @@ def openUrlRequests(url):
    	    print(e)
    	    return None
 
-def printNames(names): # simple printing command for testing
-	if names == None:
-         print("Names could not be found")
-	else:
-		for name in names:
-			print(name)
 
 def findAsjAuthors(url):
      html = openUrlRequests(url)
@@ -30,23 +24,21 @@ def findAsjAuthors(url):
      nameList = list()
      for name in allNames:
      	nameList.append(name.get_text())
-     printNames(nameList)
      return nameList
 
-def findApsrAuthors(url): # get names for the American Political Science Review
+def findApsrAuthors(url):
 	html = openUrlRequests(url)
 	try:
 		soup = BeautifulSoup(html, "html.parser")
-		allNamesUnclean = soup.findAll("li", {"class":"author"}) # under list, class tagged as author
+		nameList = soup.findAll("li", {"class":"author"})
+		allNames = list()
+		pattern = re.compile("\s*,\s*|\s+$")
+		for name in nameList:
+			name = name.get_text().lstrip("\n").title()
+			allNames = allNames + pattern.split(name)
+		return allNames
 	except AttributeError as e: # return if there is an attribute error
          return None
-         nameList = list() # create an empty list for all the names
-         pattern = re.compile("\s*,\s*|\s+$") # patterns to divide up the authors
-         for name in allNamesUnclean: # go through the list of list of names (separated by John Smith, Jack...)
-         	 name = name.get_text().lstrip("\n").title() # get rid of new line
-         	 nameList = nameList + pattern.split(name) # split at the commas
-       	 printNames(nameList) # print names
-       	 return nameList # return everything
 
 
 def findAsrAuthors(url):
@@ -61,7 +53,6 @@ def findAsrAuthors(url):
 	for name in soupList: # find all the names in the soupList, excluding "See all entries..."
 		if not "articles" in name.get_text(): # remove the "See all articles..."
 			nameList.add(name.getText().lstrip()) # remove the white space in the front
-	printNames(nameList)
 	return nameList # return the names
 
 
@@ -82,7 +73,6 @@ def findNberAuthors(url): # get names for National Bureau of Economic Research
           pattern = re.compile("\s*\,\sand\s|\sand\s|\s*,\s*|\s+$")
           names = [x for x in pattern.split(name) if x]
           nameList = nameList + names
-     printNames(nameList)
      return nameList
 
 def rssFeed(url):
@@ -133,8 +123,7 @@ def findDemographyAuthors(url):
 	except AttributeError as e:
 		return None
 	for name in allNamesUnclean:
-		nameList.append(name)
-	printNames(nameList)
+		nameList.append(name.get_text())
 	return(nameList)
 
 def findWileyAuthors(url): # find authors in Journal of Family and Marriage and Policy and Management
@@ -155,7 +144,6 @@ def findWileyAuthors(url): # find authors in Journal of Family and Marriage and 
 		pattern = re.compile("\s*,\s*|\s+$|\sand\s") # compile names by pattern
 		names = [x for x in pattern.split(name) if x] # split names at the pattern
 		nameList = nameList + names # add to the name list
-	printNames(nameList)
 	return nameList
 
 def openCurrentWiley(url): # navigate to the current issue
@@ -169,18 +157,15 @@ def openCurrentWiley(url): # navigate to the current issue
      return findWileyAuthors(currentUrl)
 
 
-jpam = openCurrentWiley("http://onlinelibrary.wiley.com/journal/10.1002/(ISSN)1520-6688")
+jpam = openCurrentWiley("http://onlinelibrary.wiley.com/journal/10.1002/(ISSN)1520-6688") # journal 
 
-jomf = openCurrentWiley("http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1741-3737")
+jomf = openCurrentWiley("http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1741-3737") # journal of marriage and family
 
 sp = openRss("sp") # social politics 
-printNames(sp)
 
 sf = openRss("sf") # social force
-printNames(sf)
 
 qje = openRss("qje") # quarterly journal of economics
-printNames(qje)
 
 demography = findDemographyAuthors("https://link.springer.com/search?sortOrder=newestFirst&facet-content-type=Article&facet-journal-id=13524")
 
@@ -191,4 +176,21 @@ apsr = findApsrAuthors("https://www.cambridge.org/core/journals/american-politic
 asj = findAsjAuthors("http://www.journals.uchicago.edu/toc/ajs/current")
 
 asr = findAsrAuthors("http://journals.sagepub.com/toc/ASR/current")
+
+allAuthors = {"Journal of Policy and Analysis" : jpam,
+			  "Journal of Marriage and Family" : jomf,
+			  "Social Politics" : sp,
+			  "Social Force" : sf,
+			  "Quarterly Journal of Economics" : qje,
+			  "Demography" : demography,
+			  "NBER" : nber,
+			  "American Political Science Review" : apsr,
+			  "American Journal of Sociology" : asj,
+			  "American Sociology Review" : asr 
+}
+
+for key in allAuthors:
+	print(key)
+	for name in allAuthors[key]:
+		print(name)
 
