@@ -5,17 +5,21 @@ from urllib.error import URLError
 from urllib.request import urlopen 
 import re
 import csv
+import smtplib
 
-CPINAMES = "http://inequality.stanford.edu/_affiliates.csv"
-JPAMURL = "http://onlinelibrary.wiley.com/journal/10.1002/(ISSN)1520-6688"
-JOMFURL = "http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1741-3737"
-WILEYURL = "http://onlinelibrary.wiley.com/"
-OUPURL = "http://academic.oup.com/"
-DEMOGRAPHYURL = "https://link.springer.com/search?sortOrder=newestFirst&facet-content-type=Article&facet-journal-id=13524"
-NBERURL = "http://www.nber.org/new.html"
-APSRURL = "https://www.cambridge.org/core/journals/american-political-science-review"
-ASJURL = "http://www.journals.uchicago.edu/toc/ajs/current"
-ASRURL = "http://journals.sagepub.com/toc/ASR/current"
+CPI_NAMES = "http://inequality.stanford.edu/_affiliates.csv"
+JPAM_URL = "http://onlinelibrary.wiley.com/journal/10.1002/(ISSN)1520-6688"
+JOMF_URL = "http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1741-3737"
+WILEY_URL = "http://onlinelibrary.wiley.com/"
+OUP_URL = "http://academic.oup.com/"
+DEMOGRAPHY_URL = "https://link.springer.com/search?sortOrder=newestFirst&facet-content-type=Article&facet-journal-id=13524"
+NBER_URL = "http://www.nber.org/new.html"
+APSR_URL = "https://www.cambridge.org/core/journals/american-political-science-review"
+ASJ_URL = "http://www.journals.uchicago.edu/toc/ajs/current"
+ASR_URL = "http://journals.sagepub.com/toc/ASR/current"
+TO = "yueli72@gmail.com"
+GMAIL_USER = "cpiresearchtracker@gmail.com"
+GMAIL_PWD = "1f9RMPapwxwB"
 
 
 def firstLast(content):
@@ -40,7 +44,7 @@ def getAffiliateNames(url):
 	for row in cr:
 		content = list(row[i] for i in included_cols)
 		name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
-		nameDict[firstLast(content)] = name
+		nameDict[row[2]] = name
 	return nameDict
 
 
@@ -146,13 +150,13 @@ def rssFeed(url):
 
 def openRss(journal): # open into the rss feed
 	try:
-		html = urlopen(OUPURL + journal) # open webpage and read
+		html = urlopen(OUP_URL + journal) # open webpage and read
 	except HTTPError as e: # print error if it encounters any
    	    print(e)
 	try:
    		soup = BeautifulSoup(html, "html.parser")
    		current = soup.find("div", {"class":"current-issue-title widget-IssueInfo__title"}).find("a", {"class":"widget-IssueInfo__link"}) # find the latest issue
-   		currentUrl = "https://academic.oup.com" + current.attrs['href']
+   		currentUrl = OUP_URL + current.attrs['href']
 	except AttributeError as e: # return if there is an attribute error
    		return None
 	try:
@@ -203,49 +207,61 @@ def openCurrentWiley(url): # navigate to the current issue
      try:
           soup = BeautifulSoup(html, "html.parser")
           current = soup.find("a", {"id":"currentIssueLink"}) # find the link to the current issue
-          currentUrl = WILEYURL + current.attrs['href'] # get to the current issue
+          currentUrl = WILEY_URL + current.attrs['href'] # get to the current issue
      except AttributeError as e: # return if there is an attribute error
           return None
      return findWileyAuthors(currentUrl)
 
-cpiAffliates = getAffiliateNames(CPINAMES)
-
-jpam = openCurrentWiley(JPAMURL) # journal of policy analysis and management
-
-jomf = openCurrentWiley(JOMFURL) # journal of marriage and family
-
-sp = openRss("sp") # social politics 
-
-sf = openRss("sf") # social force
-
-qje = openRss("qje") # quarterly journal of economics
-
-demography = findDemographyAuthors(DEMOGRAPHYURL) # demography
-
-nber = findNberAuthors(NBERURL) # nber
-
-apsr = findApsrAuthors(APSRURL) # american political science review
-
-asj = findAsjAuthors(ASJURL) # american sociology journal
-
-asr = findAsrAuthors(ASRURL) # american sociological review
+def gatherAllAuthors():
+	jpam = openCurrentWiley(JPAM_URL) # journal of policy analysis and management
+	jomf = openCurrentWiley(JOMF_URL) # journal of marriage and family
+	sp = openRss("sp") # social politics 
+	sf = openRss("sf") # social force
+	qje = openRss("qje") # quarterly journal of economics
+	demography = findDemographyAuthors(DEMOGRAPHY_URL) # demography
+	nber = findNberAuthors(NBER_URL) # nber
+	apsr = findApsrAuthors(APSR_URL) # american political science review
+	asj = findAsjAuthors(ASJ_URL) # american sociology journal
+	asr = findAsrAuthors(ASR_URL) # american sociological review
 
 
-allAuthors = {"Journal of Policy and Analysis" : jpam,
-			  "Journal of Marriage and Family" : jomf,
-			  "Social Politics" : sp,
-			  "Social Force" : sf,
-			  "Quarterly Journal of Economics" : qje,
-			  "Demography" : demography,
-			  "NBER" : nber,
-			  "American Political Science Review" : apsr,
-			  "American Journal of Sociology" : asj,
-			  "American Sociology Review" : asr 
-}
-for affiliate in cpiAffliates:
-	for namevariation in cpiAffliates[affiliate]: 
-		for journal in allAuthors:
-			for name in allAuthors[journal]:
-				if namevariation == name:
-					print(journal + ": " + name)
+	allAuthors = {"Journal of Policy and Analysis" : jpam,
+				  "Journal of Marriage and Family" : jomf,
+				  "Social Politics" : sp,
+				  "Social Force" : sf,
+				  "Quarterly Journal of Economics" : qje,
+				  "Demography" : demography,
+				  "NBER" : nber,
+				  "American Political Science Review" : apsr,
+				  "American Journal of Sociology" : asj,
+				  "American Sociology Review" : asr 
+	}
+	return allAuthors
+
+allAuthors = gatherAllAuthors()
+
+def sendAuthorInformation(allAuthors, to, gmail_user, gmail_pwd):
+	message = ""
+	cpiAffliates = getAffiliateNames(CPI_NAMES)
+
+	for affiliate in cpiAffliates:
+		for namevariation in cpiAffliates[affiliate]: 
+			for journal in allAuthors:
+				for name in allAuthors[journal]:
+					if namevariation == name:
+						print(journal + ": " + name + " " + affiliate)
+						message = message + "\n" + journal + ": " + name + " " + affiliate
+
+	smtpserver = smtplib.SMTP("smtp.gmail.com",587)
+	smtpserver.ehlo()
+	smtpserver.starttls()
+	smtpserver.ehlo
+	smtpserver.login(gmail_user, gmail_pwd)
+	header = "To: " + to + '\n' + "From: " + gmail_user + "\n" + "Subject:Research Tracker Report\n"
+	message = header + message
+	smtpserver.sendmail(gmail_user, to, message)
+	print("done!")
+	smtpserver.close()
+
+sendAuthorInformation(allAuthors, TO, GMAIL_USER, GMAIL_PWD)
 
