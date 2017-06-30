@@ -21,20 +21,24 @@ def removeMiddleName(allNames): # remove middle names (takes the first word and 
 
 def asj(url):
      html = openUrlRequests(url)
-     soup = BeautifulSoup(html, "html.parser")
-     allInfo = soup.findAll("table", {"class":"articleEntry"})
-     allAuthorInfo = {}
-     for info in allInfo:
-     	title = info.find("span", {"class":"hlFld-Title"}).get_text()
-     	link = "http://www.journals.uchicago.edu" + info.find("a", {"class":"nowrap"})["href"]
-     	authorsTagged = info.findAll("span", {"class":"hlFld-ContribAuthor"})
-     	authors = list()
-     	for author in authorsTagged:
-     		authors.append(author.get_text())
-     	authorInfo = "Title: " + title + "\n\tLink: " + link + "\n\tAuthor(s): " + ", ".join(authors) + "\n"
-     	for author in authors:
-     		allAuthorInfo[author] = authorInfo
-     return allAuthorInfo
+     try:
+         soup = BeautifulSoup(html, "html.parser")
+         allInfo = soup.findAll("table", {"class":"articleEntry"})
+         issue = soup.find("h1", {"class","widget-header header-regular toc-heading"}).get_text().rstrip("\n")
+         allAuthorInfo = {}
+         for info in allInfo:
+         	title = info.find("span", {"class":"hlFld-Title"}).get_text()
+         	link = "http://www.journals.uchicago.edu" + info.find("a", {"class":"nowrap"})["href"]
+         	authorsTagged = info.findAll("span", {"class":"hlFld-ContribAuthor"})
+         	authors = list()
+         	for author in authorsTagged:
+         		authors.append(author.get_text())
+         	authors = removeMiddleName(authors)
+         	for author in authors:
+         		allAuthorInfo[author] = "Title: " + title + "\n\tIssue: " + issue + "\n\tAuthor(s): " + ", ".join(authors)  + "\n\tLink: " + link + "\n"
+         return allAuthorInfo
+     except AttributeError as e:
+        return None
 
 def printNames(names): # simple printing command for testing
 	if names == None:

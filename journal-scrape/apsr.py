@@ -12,6 +12,8 @@ def removeMiddleName(allNames): # remove middle names (takes the first word and 
 		nameList.append(" ".join(fm)) # join together the first and last name as a string, add to the list of names
 	return(nameList)
 
+# Find all APSR authors and their information: title, issue, date, all authors, and link
+# Split names and assign each author to its corresponding publication
 def findApsrAuthors(url):
 	try:
 		html = requests.get(url).text 
@@ -20,19 +22,19 @@ def findApsrAuthors(url):
 	try:
 		soup = BeautifulSoup(html, "html.parser")
 		allInfo = soup.findAll("ul", {"class":"details"})
+		issue = soup.find("h2", {"class":"heading_07"}).get_text().replace("\n", " ")
 		allAuthorInfo = {}
 		for info in allInfo:
-			title = info.find("li", {"class":"title"}).get_text()
+			title = info.find("li", {"class":"title"}).get_text().strip("\n")
 			date = info.find("span", {"class":"date"}).get_text()
 			link = info.find("a", {"class":"url"}).get_text()
-			authors = info.find("li", {"class":"author"}).get_text().lstrip("\n").title()
-			authorInfo = "Title: " + title + "\n\tDate: " + date + "\n\tLink: " + link + "\n\tAuthor(s)" + authors + "\n"
+			authors = info.find("li", {"class":"author"}).get_text().replace("\n", " ").title()
+			authorInfo = "Title: " + title + "\n\tIssue: " + issue + "\n\tDate: " + date + "\n\tAuthor(s): " + authors + "\n\tLink: " + link + "\n"
 			pattern = re.compile("\s*,\s*|\s+$") # remove commas and spaces at the end
 			eachName = removeMiddleName(pattern.split(authors))
 			for name in eachName:
 				allAuthorInfo[name] = authorInfo
 		return allAuthorInfo
-
 	except AttributeError as e: # return if there is an attribute error
          return None
 
