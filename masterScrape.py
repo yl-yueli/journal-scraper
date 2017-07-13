@@ -7,12 +7,15 @@ import re
 import csv
 import smtplib
 import feedparser
+from unidecode import unidecode
 
 CPI_NAMES = "http://inequality.stanford.edu/_affiliates.csv"
-JPAM_URL = "http://onlinelibrary.wiley.com/journal/10.1002/(ISSN)1520-6688"
-JOMF_URL = "http://onlinelibrary.wiley.com/journal/10.1111/(ISSN)1741-3737"
-WILEY_URL = "http://onlinelibrary.wiley.com"
-OUP_URL = "http://academic.oup.com/"
+JPAM_URL = "/journal/10.1002/(ISSN)1520-6688"
+JOMF_URL = "/journal/10.1111/(ISSN)1741-3737"
+AER_URL = 'https://www.aeaweb.org/journals/aer/search-results?current=on&journal=1&q='
+AER_ADD_LINK = "https://www.aeaweb.org"
+WILEY_ADD_LINK = "http://onlinelibrary.wiley.com"
+OUP_ADD_LINK = "http://academic.oup.com/"
 DEMOGRAPHY_URL = "https://link.springer.com/search?sortOrder=newestFirst&facet-content-type=Article&facet-journal-id=13524"
 NBER_URL = "http://www.nber.org/new.html"
 APSR_URL = "https://www.cambridge.org/core/journals/american-political-science-review/latest-issue"
@@ -21,7 +24,10 @@ ASR_URL = "http://journals.sagepub.com/toc/ASR/current"
 TO = "yueli72@gmail.com"
 GMAIL_USER = "cpiresearchtracker@gmail.com"
 GMAIL_PWD = "1f9RMPapwxwB"
-sendMailNow = True
+SEND_MAIL_NOW = False
+HEADERS = {
+ 	'User-Agent':'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
+}
 
 def printNames(names): # simple printing command for testing
   if names == None:
@@ -44,7 +50,11 @@ def firstInitialLast(content): # first initial then last name
 def lastFirstInitial(content): # last name then first name
 	return " ".join(content)
 
-def getAffiliateNames(url): # obtain all affiliate names
+# obtain all affiliate names from the inequality.stanford.edu website
+# make a dictionary of names. The key will be the website, the values will be 
+# the name variations. This way, fetching the website will be easy and we can
+# iterate through all possible name variations
+def getAffiliateNames(url):
 	html = urlopen(url)
 	affiliateFile = csv.reader(html.read().decode('utf-8').splitlines()) # read csv file
 	included_cols = [0, 1] # include first and last name column
@@ -60,16 +70,20 @@ def getAffiliateNames(url): # obtain all affiliate names
 		nameDict[row[2]] = name # as described, key will be affiliate's page, name will be the list of variations
 	return nameDict
 
-
-def openUrlRequests(url): # open url using requests package
+# open url using requests package
+# handles errors
+def openUrlRequests(url, headers = ""):
 	try:
- 	    html = requests.get(url).text # open journal home page
+ 	    html = requests.get(url, headers = headers).text # open journal home page
  	    return html
 	except HTTPError as e: # print error if it encounters any
    	    print(e)
    	    return None
 
 # remove middle names (takes the first word and the last word)
+# returns a list of names without the middle names
+# side note: the list of names with the csv file does a similar way of dealing
+# with names, so almost all names should match
 def removeMiddleName(allNames):
 	nameList = list()
 	for name in allNames: 
@@ -77,6 +91,32 @@ def removeMiddleName(allNames):
 		fm = [fml[0], fml[-1]] # create a list with the first word and the last word (assume first and last name)
 		nameList.append(" ".join(fm)) # join together the first and last name as a string, add to the list of names
 	return(nameList)
+
+# Find all authors from the American Economic Review
+# This one needs headers because I can't open it without changing the user agent to a googlebot
+def findAerAuthors(url, headers):
+	html = openUrlRequests(url, headers)
+	try:
+		soup = BeautifulSoup(html, "html.parser")
+		allInfo = soup.findAll("li", {"class":"article"})
+		allAuthorInfo = {}
+		for info in allInfo:
+			name = info.find("div")
+			if name != None:
+				authors = ' '.join(unidecode(name.get_text()).split())
+				pattern = re.compile("(by\s)|(,\s)|(\sand\s)")
+				unfiltered_authors = [x for x in pattern.split(authors) if x]
+				list_authors = [x for x in unfiltered_authors if not re.search(pattern, x)]
+				list_authors = removeMiddleName(list_authors)
+				title = info.find("h4", {"class":"title"}).get_text().strip("\n")
+				link = AER_ADD_LINK + info.findAll("a")[1]["href"]
+				date = info.find("h5", {"class":"published-at"}).get_text()
+				authorInfo = "Title: " + title + "\n\tDate: " + date + "\n\tAuthor(s): " + authors + "\n\tLink: " + link + "\n"
+				for name in list_authors:
+					allAuthorInfo[name] = authorInfo
+		return allAuthorInfo
+	except AttributeError as e:
+        return None
 
 # Find authors for American Journal of Sociology including issue, title, authors, and link
 # In this case, names are already in a list, so we individually loop through the names instead
@@ -94,7 +134,7 @@ def findAjsAuthors(url):
          	authorsTagged = info.findAll("span", {"class":"hlFld-ContribAuthor"})
          	authors = list()
          	for author in authorsTagged:
-         		authors.append(author.get_text())
+         		authors.append(unidecode(author.get_text()))
          	authors = removeMiddleName(authors)
          	for author in authors:
          		allAuthorInfo[author] = "Title: " + title + "\n\tIssue: " + issue + "\n\tAuthor(s): " + ", ".join(authors)  + "\n\tLink: " + link + "\n"
@@ -115,7 +155,7 @@ def findApsrAuthors(url):
 			title = info.find("li", {"class":"title"}).get_text().strip("\n")
 			date = info.find("span", {"class":"date"}).get_text()
 			link = info.find("a", {"class":"url"}).get_text()
-			authors = info.find("li", {"class":"author"}).get_text().replace("\n", " ").title().lstrip(" ")
+			authors = unidecode(info.find("li", {"class":"author"}).get_text()).replace("\n", " ").title().lstrip(" ")
 			authorInfo = "Title: " + title + "\n\tIssue: " + issue + "\n\tDate: " + date + "\n\tAuthor(s): " + authors + "\n\tLink: " + link + "\n"
 			pattern = re.compile("\s*,\s*|\s+$") # remove commas and spaces at the end
 			eachName = removeMiddleName(pattern.split(authors))
@@ -142,7 +182,7 @@ def findAsrAuthors(url): # find all authors for the American Sociological Review
 			authors = set()
 			for author in authorsTagged:
 				if not "articles" in author.get_text(): # remove the "See all articles..."
-					authors.add(author.get_text().lstrip())
+					authors.add(unidecode(author.get_text()).lstrip())
 			authorInfo = "Title: " + title + "\n\tIssue: " + issue + "\n\tDate: " + date + "\n\tAuthor(s): " + ", ".join(authors) + "\n\tLink: " + link + "\n"
 			authors = removeMiddleName(authors)
 			for author in authors:
@@ -161,7 +201,7 @@ def findNberAuthors(url):
 	  allAuthorInfo = {}
 	  for info in allInfo:
 	    link = "http://www.nber.org" + info.find("a")["href"]
-	    titleAuthors = info.get_text().strip("\n").split("\n")
+	    titleAuthors = unidecode(info.get_text()).strip("\n").split("\n")
 	    title = titleAuthors[0]
 	    allAuthors = re.sub("#.*$","", titleAuthors[1])
 	    authorInfo = "Title: " + title + "\n\tAuthor(s): " + allAuthors + "\n\tDate: " + date + "\n\tLink: " + link + "\n"
@@ -175,12 +215,13 @@ def findNberAuthors(url):
 
 def rssFeed(url):
 	feed = feedparser.parse(url)
+	if feed.status == 404: return None
 	allAuthorInfo = {}
 	for item in feed["items"]:
 		authorInfo = str("Title: " + item["title"] + "\n\tAuthor(s): " + item["author"] + "\n\tLink: " + item["link"] + "\n")
 		pattern = re.compile("\s*,\s*|\s+$") # pattern to get rid of commas and white spaces
 		names = item["author"].rstrip() # get text and the white space at the end
-		eachName = pattern.split(names) # split at the given patterns
+		eachName = pattern.split(unidecode(names)) # split at the given patterns
 		for name in eachName:
 			junk = name.split(" ")
 			junk[1] = junk[1][:1]
@@ -190,14 +231,14 @@ def rssFeed(url):
 
 def openRss(journal): # open into the rss feed
 	try:
-		html = urlopen(OUP_URL + journal) # open webpage and read
+		html = urlopen(OUP_ADD_LINK + journal) # open webpage and read
 	except HTTPError as e: # print error if it encounters any
    	    print(e)
 	try:
    		soup = BeautifulSoup(html, "html.parser")
    		current = soup.find("div", {"class":"current-issue-title widget-IssueInfo__title"}).find("a", {"class":"widget-IssueInfo__link"}) 
    		# find the latest issue
-   		currentUrl = OUP_URL + current.attrs['href']
+   		currentUrl = OUP_ADD_LINK + current.attrs['href']
 	except AttributeError as e: # return if there is an attribute error
    		return None
 	try:
@@ -211,6 +252,8 @@ def openRss(journal): # open into the rss feed
 		return None
 	return rssFeed(rssFeedTag.attrs['href']) # using the rss url, return all the authors found in the rss feed
 
+# find all authors from the Demography journal
+# return key of the author's name and title, link, date, and all authors
 def findDemographyAuthors(url):
 	html = openUrlRequests(url)
 	try:
@@ -224,8 +267,8 @@ def findDemographyAuthors(url):
 			authorsTagged = info.findAll("span", {"class":"authors"})
 			authors = list()
 			for author in authorsTagged:
-				authors = removeMiddleName(author.get_text().split(",\n")) + authors
-			authorInfo = "Title: " + title + "\n\tLink: " + link + "\n\tAuthor(s): " + ", ".join(authors) + "\n\tDate: " + date + "\n"
+				authors = removeMiddleName(unidecode(author.get_text()).split(",\n")) + authors
+			authorInfo = "Title: " + title + "\n\tAuthor(s): " + ", ".join(authors) + "\n\tDate: " + date + "\n\tLink: " + link + "\n"
 			for author in authors:
 				allAuthorInfo[author] = authorInfo
 		return allAuthorInfo
@@ -252,7 +295,7 @@ def findWileyAuthors(url): # find authors in Journal of Family & Marriage and Po
           record = record.get_text()
           # if it does not contain a digit (i.e. not a date), does not contain the name of the journal)
           if not re.search(r"\d|(Public)|(National)|^$", record): 
-            authors = record
+            authors = unidecode(record)
           elif re.search(r"\d", record): # if it contains numbers, then it has the date (and a lot of other junk)
             date = re.search("\d+\s[A-Z]*\s\d{4}", record).group() # search for day (digit), month (character), year (four digits) and extract text
           pattern = re.compile("\s*,\s*|\s+$|\sand\s") # compile names by pattern
@@ -270,19 +313,15 @@ def openCurrentWiley(url): # navigate to the current issue
      try:
           soup = BeautifulSoup(html, "html.parser")
           current = soup.find("a", {"id":"currentIssueLink"}) # find the link to the current issue
-          currentUrl = WILEY_URL + current.attrs['href'] # get to the current issue
+          currentUrl = WILEY_ADD_LINK + current.attrs['href'] # get to the current issue
      except AttributeError as e: # return if there is an attribute error
           return None
      return findWileyAuthors(currentUrl)
 
-jomf = openCurrentWiley(JOMF_URL)
-print(jomf)
-printNames(jomf)
-
 
 def gatherAllAuthors():
-	jpam = openCurrentWiley(JPAM_URL) # journal of policy analysis and management
-	jomf = openCurrentWiley(JOMF_URL) # journal of marriage and family
+	jpam = openCurrentWiley(WILEY_ADD_LINK + JPAM_URL) # journal of policy analysis and management
+	jomf = openCurrentWiley(WILEY_ADD_LINK + JOMF_URL) # journal of marriage and family
 	sp = openRss("sp") # social politics 
 	sf = openRss("sf") # social force
 	qje = openRss("qje") # quarterly journal of economics
@@ -291,6 +330,7 @@ def gatherAllAuthors():
 	apsr = findApsrAuthors(APSR_URL) # american political science review
 	ajs = findAjsAuthors(AJS_URL) # american sociology journal
 	asr = findAsrAuthors(ASR_URL) # american sociological review
+	aer = findAerAuthors(AER_URL, HEADERS)
 
 	# create a dictionary of all authors, journal name as key and the list of names as values
 	allAuthors = {"Journal of Policy and Analysis" : jpam,
@@ -302,7 +342,8 @@ def gatherAllAuthors():
 				  "NBER" : nber,
 				  "American Political Science Review" : apsr,
 				  "American Journal of Sociology" : ajs,
-				  "American Sociology Review" : asr 
+				  "American Sociology Review" : asr,
+				  "American Economic Review" : aer 
 	}
 	return allAuthors
 
@@ -334,7 +375,7 @@ def sendAuthorInformation(allAuthors, to, gmail_user, gmail_pwd):
 	print("done!")
 	smtpserver.close()
 
-if sendMailNow:
+if SEND_MAIL_NOW:
 	sendAuthorInformation(allAuthors, TO, GMAIL_USER, GMAIL_PWD) # send email
 else:
 	for affiliate in cpiAffliates: # loop through all affiliates
