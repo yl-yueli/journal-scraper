@@ -18,12 +18,13 @@ import re
 import smtplib
 import feedparser
 from unidecode import unidecode
+import time
 #import csv
 
 CPI_NAMES = "http://inequality.stanford.edu/_affiliates.csv"
 JPAM_URL = "/journal/10.1002/(ISSN)1520-6688"
 JOMF_URL = "/journal/10.1111/(ISSN)1741-3737/"
-AER_URL = 'https://www.aeaweb.org/journals/aer/search-results?current=on&journal=1&q='
+AER_URL = "/journals/aer/search-results?current=on&journal=1&q="
 AER_ADD_LINK = "https://www.aeaweb.org"
 WILEY_ADD_LINK = "http://onlinelibrary.wiley.com"
 OUP_ADD_LINK = "http://academic.oup.com/"
@@ -35,10 +36,10 @@ AJS_URL = "/toc/ajs/current"
 AJS_ADD_LINK = "http://www.journals.uchicago.edu"
 ASR_URL = "/toc/ASR/current"
 ASR_ADD_LINK = "http://journals.sagepub.com"
-TO = ["yueli72@gmail.com", "sgarlow@stanford.edu"]
+TO = ["yueli72@gmail.com"]
 GMAIL_USER = "cpiresearchtracker@gmail.com"
 GMAIL_PWD = "1f9RMPapwxwB"
-SEND_MAIL_NOW = False
+SEND_MAIL_NOW = True
 # The following is the user agent for googlebot. May eventually need to update?
 HEADERS = {
  	'User-Agent':'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
@@ -98,10 +99,13 @@ def getAffiliateNames(url):
 					if first:
 						first = False # ignore the first row
 						continue 
-					content = list(row[i] for i in included_cols) # create a list with the first name and last name
-					# create variations of the name
-					name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
-					allAffiliates[row[2]] = name # as described, key will be affiliate's page, name will be the list of variations
+					try:
+						content = list(row[i] for i in included_cols) # create a list with the first name and last name
+						# create variations of the name
+						name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
+						allAffiliates[row[2]] = name # as described, key will be affiliate's page, name will be the list of variations
+					except IndexError:
+						continue
 			except: # if reading the CSV does not work, return non
 				return None
 		else:
@@ -109,12 +113,15 @@ def getAffiliateNames(url):
 				if first:
 					first = False # skip the first row
 					continue
+				try:
 				# take the first two columns for first and last name
-				content = [unidecode(info.findAll("td")[0].get_text()), unidecode(info.findAll("td")[1].get_text())]
-				link = unidecode(info.findAll("td")[2].get_text()) # the third column is the link, which is the key
-				# create all variations of the name
-				name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
-				allAffiliates[link] = name
+					content = [unidecode(info.findAll("td")[0].get_text()), unidecode(info.findAll("td")[1].get_text())]
+					link = unidecode(info.findAll("td")[2].get_text()) # the third column is the link, which is the key
+					# create all variations of the name
+					name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
+					allAffiliates[link] = name
+				except IndexError:
+					continue
 		return allAffiliates
 	except AttributeError as e:
 		return None
@@ -144,12 +151,13 @@ def getAuthorInfo(title = "", issue = "", date = "", authors = "", link = ""):
 # with names, so almost all names should match
 def removeMiddleName(allNames):
 	nameList = list()
+	allNames = filter(None, allNames)
 	for name in allNames: 
 		name = re.sub("\.", "", name) # remove any periods
 		fml = name.lstrip().split(" ") # obtain first middle last name
 		pattern = re.compile("Jr|Sr|II|III|IV") 
 		if re.search(pattern, fml[-1]): # Ignores suffixes by skipping the last word
-			if len(fml) > 1:
+			if len(fml) > 1: # This only applies if length is greater than 1
 				fm = [fml[0], fml[-2]]
 		else:
 			fm = [fml[0], fml[-1]] # create a list with the first word and the last word (assume first and last name)
@@ -158,8 +166,8 @@ def removeMiddleName(allNames):
 
 # Find all authors from the American Economic Review
 # This one needs headers because I can't open it without changing the user agent to a googlebot
-def findAerAuthors(url, headers):
-	html = openUrlRequests(url, headers)
+def findAerAuthors(home_url, current_url, headers):
+	html = openUrlRequests(home_url + current_url, headers)
 	try:
 		soup = BeautifulSoup(html, "html.parser")
 		allInfo = soup.findAll("li", {"class":"article"})
@@ -174,7 +182,7 @@ def findAerAuthors(url, headers):
 				list_authors = [x for x in unfiltered_authors if not re.search(pattern, x)] 
 				list_authors = removeMiddleName(list_authors)
 				title = info.find("h4", {"class":"title"}).get_text().strip("\n")
-				link = AER_ADD_LINK + info.findAll("a")[1]["href"]
+				link = home_url + info.findAll("a")[1]["href"]
 				date = info.find("h5", {"class":"published-at"}).get_text()
 				authorInfo = getAuthorInfo(title=title, date=date, authors=authors, link=link)
 				for name in list_authors:
@@ -284,7 +292,7 @@ def rssFeed(url):
 	if feed.status == 503: return None
 	allAuthorInfo = {}
 	for item in feed["items"]:
-		authorInfo = getAuthorInfo(title = str(item["title"]), date = str(item["published"]), authors = str(item["author"]), link = str(item["link"]))
+		authorInfo = getAuthorInfo(title = unidecode(str(item["title"])), date = unidecode(str(item["published"])), authors = unidecode(str(item["author"])), link = unidecode(str(item["link"])))
 		pattern = re.compile("\s*,\s*|\s+$") # pattern to get rid of commas and white spaces
 		names = item["author"].rstrip() # get text and the white space at the end
 		eachName = removeMiddleName(pattern.split(unidecode(names))) # split at the given patterns
@@ -327,7 +335,7 @@ def findDemographyAuthors(url):
 		allInfo = soup.find("div", {"id":"kb-nav--main"}).findAll("li")
 		allAuthorInfo = {}
 		for info in allInfo:
-			title = info.find("a", {"class":"title"}).get_text()
+			title = info.find("a", {"class":"title"}).get_text().strip()
 			link = "https://link.springer.com" + info.find("a", {"class":"title"})["href"]
 			date = info.find("span", {"class":"year"})["title"]
 			authorsTagged = info.findAll("span", {"class":"authors"})
@@ -396,7 +404,7 @@ def gatherAllAuthors():
 	apsr = findApsrAuthors(APSR_URL) # american political science review
 	ajs = findAjsAuthors(AJS_ADD_LINK + AJS_URL) # american sociology journal
 	asr = findAsrAuthors(ASR_ADD_LINK + ASR_URL) # american sociological review
-	aer = findAerAuthors(AER_URL, HEADERS)
+	aer = findAerAuthors(AER_ADD_LINK, AER_URL, HEADERS)
 
 	# create a dictionary of all authors, journal name as key and the list of names as values
 	allAuthors = {"Journal of Policy and Analysis" : jpam,
@@ -420,28 +428,34 @@ def getMessage(allAuthors, cpiAffiliates):
 		if allAuthors[journal] is None:
 			message = message + "ERROR: " + journal + " cannot be found.\n\n"
 
-	if cpiAffiliates == {}:
-		message = "Could not get the list of affiliates.\n"
+	if cpiAffiliates == None:
+		message = "List of CPI affiliates was not found.\n\n"
 	else:
-		for affiliate in cpiAffiliates: # loop through all affiliates
-			for namevariation in cpiAffiliates[affiliate]: # loop through all name variations
-				for journal in allAuthors: # loop through the journals
-					if allAuthors[journal] is not None:
-						for name in allAuthors[journal]: # loop through all authors of the journal
-							if namevariation == name: # if a name matches
-								message = message + journal + ": " + name + " (" + affiliate  + ")\n" + allAuthors[journal][name] + "\n"
+		for journal in allAuthors:
+			first = 0
+			if allAuthors[journal] is not None:
+				for name in allAuthors[journal]:
+					for affiliate in cpiAffiliates:
+						for namevariation in cpiAffiliates[affiliate]:
+							if namevariation == name and first == 0: # if a name matches
+								message = message + journal + "\n\n"
+								first = 1
+							if namevariation == name:
+								message = message + "\t" + journal + ": " + name + " (" + affiliate  + ")\n" + allAuthors[journal][name] + "\n"
 	return message
+	
 
 # Send the email
 def sendAuthorInformation(allAuthors, cpiAffiliates, to, gmail_user, gmail_pwd):
 	message = getMessage(allAuthors, cpiAffiliates)
+	message = message.encode('ascii', 'ignore').decode('ascii')
 
 	smtpserver = smtplib.SMTP("smtp.gmail.com", 587)
 	smtpserver.ehlo()
 	smtpserver.starttls()
 	smtpserver.ehlo
 	smtpserver.login(gmail_user, gmail_pwd)
-	header = "To: " + str(to) + '\n' + "From: " + gmail_user + "\n" + "Subject:Research Tracker Report\n"
+	header = "To: " + str(to) + '\n' + "From: " + gmail_user + "\n" + "Subject:Research Tracker Report " + time.strftime("%m/%d/%Y") + "\n"
 	message = header + message
 	smtpserver.sendmail(gmail_user, to, message)
 	print("done!")
