@@ -39,7 +39,7 @@ ASR_ADD_LINK = "http://journals.sagepub.com"
 TO = ["yueli72@gmail.com"]
 GMAIL_USER = "cpiresearchtracker@gmail.com"
 GMAIL_PWD = "1f9RMPapwxwB"
-SEND_MAIL_NOW = True
+SEND_MAIL_NOW = False
 # The following is the user agent for googlebot. May eventually need to update?
 HEADERS = {
  	'User-Agent':'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
@@ -98,21 +98,21 @@ def getAffiliateNames(url):
 				for row in affiliateFile: # for every row of the file
 					if first:
 						first = False # ignore the first row
-						continue 
+						pass
 					try:
 						content = list(row[i] for i in included_cols) # create a list with the first name and last name
 						# create variations of the name
 						name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
 						allAffiliates[row[2]] = name # as described, key will be affiliate's page, name will be the list of variations
 					except IndexError:
-						continue
-			except: # if reading the CSV does not work, return non
+						pass
+			except: # if reading the CSV does not work, return none
 				return None
 		else:
 			for info in allInfo: 
 				if first:
 					first = False # skip the first row
-					continue
+					pass
 				try:
 				# take the first two columns for first and last name
 					content = [unidecode(info.findAll("td")[0].get_text()), unidecode(info.findAll("td")[1].get_text())]
@@ -121,7 +121,7 @@ def getAffiliateNames(url):
 					name = [firstLast(content), lastFirst(content), firstInitialLast(content), lastFirstInitial(content)]
 					allAffiliates[link] = name
 				except IndexError:
-					continue
+					pass
 		return allAffiliates
 	except AttributeError as e:
 		return None
@@ -154,11 +154,13 @@ def removeMiddleName(allNames):
 	allNames = filter(None, allNames)
 	for name in allNames: 
 		name = re.sub("\.", "", name) # remove any periods
-		fml = name.lstrip().split(" ") # obtain first middle last name
+		fml = name.strip().split(" ") # obtain first middle last name
 		pattern = re.compile("Jr|Sr|II|III|IV") 
 		if re.search(pattern, fml[-1]): # Ignores suffixes by skipping the last word
-			if len(fml) > 1: # This only applies if length is greater than 1
+			try: # This only applies if length is greater than 1
 				fm = [fml[0], fml[-2]]
+			except IndexError: 
+				pass
 		else:
 			fm = [fml[0], fml[-1]] # create a list with the first word and the last word (assume first and last name)
 		nameList.append(" ".join(fm)) # join together the first and last name as a string, add to the list of names
@@ -184,7 +186,7 @@ def findAerAuthors(home_url, current_url, headers):
 				title = info.find("h4", {"class":"title"}).get_text().strip("\n")
 				link = home_url + info.findAll("a")[1]["href"]
 				date = info.find("h5", {"class":"published-at"}).get_text()
-				authorInfo = getAuthorInfo(title=title, date=date, authors=authors, link=link)
+				authorInfo = getAuthorInfo(title = title, date = date, authors = authors, link = link)
 				for name in list_authors:
 					allAuthorInfo[name] = authorInfo
 		return allAuthorInfo
@@ -210,7 +212,7 @@ def findAjsAuthors(url):
          		authors.append(unidecode(author.get_text()))
          	authors = removeMiddleName(authors)
          	for author in authors:
-         		allAuthorInfo[author] = getAuthorInfo(title=title, issue=issue, authors=authors, link=link)
+         		allAuthorInfo[author] = getAuthorInfo(title = title, issue = issue, authors = authors, link = link)
          return allAuthorInfo
      except AttributeError as e:
         return None
@@ -287,7 +289,10 @@ def findNberAuthors(url):
   	return None
 
 def rssFeed(url):
-	feed = feedparser.parse(url)
+	try:
+		feed = feedparser.parse(url)
+	except AttributeError:
+		return None
 	if feed.status == 404: return None
 	if feed.status == 503: return None
 	allAuthorInfo = {}
@@ -428,7 +433,7 @@ def getMessage(allAuthors, cpiAffiliates):
 		if allAuthors[journal] is None:
 			message = message + "ERROR: " + journal + " cannot be found.\n\n"
 
-	if cpiAffiliates == None:
+	if cpiAffiliates == None or cpiAffiliates == {}:
 		message = "List of CPI affiliates was not found.\n\n"
 	else:
 		for journal in allAuthors:
