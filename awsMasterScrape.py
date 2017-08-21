@@ -19,7 +19,7 @@ import smtplib
 import feedparser
 from unidecode import unidecode
 import time
-#import csv
+import csv
 
 CPI_NAMES = "http://inequality.stanford.edu/_affiliates.csv"
 JPAM_URL = "/journal/10.1002/(ISSN)1520-6688"
@@ -36,10 +36,10 @@ AJS_URL = "/toc/ajs/current"
 AJS_ADD_LINK = "http://www.journals.uchicago.edu"
 ASR_URL = "/toc/ASR/current"
 ASR_ADD_LINK = "http://journals.sagepub.com"
-TO = ["####"]
-GMAIL_USER = "####"
+TO = ["####", "####"]
+GMAIL_USER = "#####"
 GMAIL_PWD = "####"
-SEND_MAIL_NOW = False
+SEND_MAIL_NOW = True
 # The following is the user agent for googlebot. May eventually need to update?
 HEADERS = {
  	'User-Agent':'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'
@@ -467,14 +467,11 @@ def sendAuthorInformation(allAuthors, cpiAffiliates, to, gmail_user, gmail_pwd):
 	smtpserver.close()
 
 # Main task: get all the affiliates, then email all the corresponding information
-
-allAuthors = gatherAllAuthors()
-cpiAffiliates = getAffiliateNames(CPI_NAMES) # gather affiliate name
-
-if SEND_MAIL_NOW:
-	sendAuthorInformation(allAuthors, cpiAffiliates, TO, GMAIL_USER, GMAIL_PWD) # send email
-else:
-	print(getMessage(allAuthors, cpiAffiliates))
-
-
+def lambda_handler(event, content):
+    allAuthors = gatherAllAuthors()
+    cpiAffiliates = getAffiliateNames(CPI_NAMES) # gather affiliate name
+    if SEND_MAIL_NOW:
+    	sendAuthorInformation(allAuthors, cpiAffiliates, TO, GMAIL_USER, GMAIL_PWD) # send email
+    else:
+    	print(getMessage(allAuthors, cpiAffiliates))
 
