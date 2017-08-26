@@ -36,9 +36,9 @@ AJS_URL = "/toc/ajs/current"
 AJS_ADD_LINK = "http://www.journals.uchicago.edu"
 ASR_URL = "/toc/ASR/current"
 ASR_ADD_LINK = "http://journals.sagepub.com"
-TO = ["####", "####"]
-GMAIL_USER = "#####"
-GMAIL_PWD = "####"
+TO = ["yueli72@gmail.com", "sgarlow@stanford.edu"]
+GMAIL_USER = "cpiresearchtracker@gmail.com"
+GMAIL_PWD = "1f9RMPapwxwB"
 SEND_MAIL_NOW = True
 # The following is the user agent for googlebot. May eventually need to update?
 HEADERS = {
